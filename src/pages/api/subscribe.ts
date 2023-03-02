@@ -1,17 +1,47 @@
+import { query } from 'faunadb';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSession } from 'next-auth/react';
+import { fauna } from '../../services/fauna';
 import { stripe } from '../../services/stripe';
+
+type User = {
+  ref: {
+    id: string;
+  };
+  data: {
+    stripe_customer_id: string;
+  };
+};
 
 const subscribeMethod = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method === 'POST') {
     const session = await getSession({ req });
 
-    const stripeSession = await stripe.customers.create({
-      email: session.user.email,
-    });
+    const user = await fauna.query<User>(
+      query.Get(
+        query.Match(
+          query.Index('user_by_email'),
+          query.Casefold(session.user.email)
+        )
+      )
+    );
+
+    let customerId = user.data.stripe_customer_id;
+
+    if (!customerId) {
+      const stripeSession = await stripe.customers.create({
+        email: session.user.email,
+      });
+
+      await fauna.query(
+        query.Update(query.Ref(query.Collection('users'), user.ref.id), {
+          data: { stripe_customer_id: stripeSession.id },
+        })
+      );
+    }
 
     const stripeCheckoutSession = await stripe.checkout.sessions.create({
-      customer: stripeSession.id,
+      customer: customerId,
       payment_method_types: ['card'],
       billing_address_collection: 'required',
       line_items: [
