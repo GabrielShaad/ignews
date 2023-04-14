@@ -4,7 +4,7 @@ import { query } from 'faunadb';
 
 import { fauna } from '../../../services/fauna';
 
-export const authOptions = {
+const authOptions = {
   providers: [
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID,
@@ -35,6 +35,8 @@ export const authOptions = {
             )
           )
         );
+
+        console.log(user)
 
         return true;
       } catch (error) {
